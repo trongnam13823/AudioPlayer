@@ -12,14 +12,11 @@
         box-sizing: border-box;
         user-select: none;
       }
-
       button {
         background-color: #ddd;
         color: #000;
         border: none;
-        border-radius: unset;
       }
-
       body {
         font-family: sans-serif;
         display: flex;
@@ -155,6 +152,13 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", () => {
+        // Set mặc định input time là giờ hiện tại
+        const stopTimeInput = document.getElementById("stopTime");
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        stopTimeInput.value = `${hh}:${mm}`;
+
         class ArchivePlaylist {
           constructor() {
             this.audio = new Audio();
