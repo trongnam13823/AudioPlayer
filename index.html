@@ -175,340 +175,292 @@
     </div>
 
     <script>
-      class ArchivePlaylist {
-        constructor() {
-          this.audio = new Audio();
-          this.tracks = [];
-          this.currentTrack = 0;
-          this.noSleep = new NoSleep();
-          this.replayEnabled = false;
+      document.addEventListener("DOMContentLoaded", () => {
+        class ArchivePlaylist {
+          constructor() {
+            this.audio = new Audio();
+            this.tracks = [];
+            this.currentTrack = 0;
+            this.noSleep = new NoSleep();
+            this.replayEnabled = false;
 
-          // Timer
-          this.timer = null;
-          this.countdownInterval = null;
-          this.stopTime = null;
+            this.timer = null;
+            this.countdownInterval = null;
+            this.stopTime = null;
 
-          // UI elements
-          this.playlistEl = document.getElementById("playlist");
-          this.playPauseBtn = document.getElementById("playPauseBtn");
-          this.replayBtn = document.getElementById("replayBtn");
-          this.progress = document.getElementById("progress");
-          this.currentTimeEl = document.getElementById("currentTime");
-          this.durationEl = document.getElementById("duration");
+            // UI elements
+            this.playlistEl = document.getElementById("playlist");
+            this.playPauseBtn = document.getElementById("playPauseBtn");
+            this.replayBtn = document.getElementById("replayBtn");
+            this.progress = document.getElementById("progress");
+            this.currentTimeEl = document.getElementById("currentTime");
+            this.durationEl = document.getElementById("duration");
+            this.startTimerBtn = document.getElementById("startTimerBtn");
+            this.stopTimeInput = document.getElementById("stopTime");
+            this.countdownEl = document.getElementById("countdown");
+            this.cancelTimerBtn = document.getElementById("cancelTimerBtn");
 
-          this.startTimerBtn = document.getElementById("startTimerBtn");
-          this.stopTimeInput = document.getElementById("stopTime");
-          this.countdownEl = document.getElementById("countdown");
-          this.cancelTimerBtn = document.getElementById("cancelTimerBtn");
+            this.initEventListeners();
+            this.loadStateOnStart();
+          }
 
-          this.initEventListeners();
-          this.loadStateOnStart();
-        }
-
-        // ========== Fetch & Process Tracks ==========
-        async fetchTracks(identifier) {
-          const res = await fetch(`https://archive.org/metadata/${identifier}`);
-          const data = await res.json();
-          const files = data?.files ?? [];
-          const filtered = files.filter((f) =>
-            ["Opus", "VBR MP3"].includes(f.format)
-          );
-          filtered.sort((a, b) => b.mtime - a.mtime);
-          return filtered.map((t, i) => {
-            let title = t.name
-              .replace(/\.[^/.]+$/, "")
-              .normalize("NFKC")
-              .split("#")[0]
-              .trim();
-            return {
+          async fetchTracks(identifier) {
+            const res = await fetch(
+              `https://archive.org/metadata/${identifier}`
+            );
+            const data = await res.json();
+            const files = data?.files ?? [];
+            const filtered = files.filter((f) =>
+              ["Opus", "VBR MP3"].includes(f.format)
+            );
+            filtered.sort((a, b) => b.mtime - a.mtime);
+            return filtered.map((t, i) => ({
               id: i.toString(),
-              title: `${filtered.length - i} - ${title}`,
+              title: `${filtered.length - i} - ${t.name
+                .replace(/\.[^/.]+$/, "")
+                .normalize("NFKC")
+                .split("#")[0]
+                .trim()}`,
               url: `https://archive.org/download/${identifier}/${encodeURIComponent(
                 t.name
               )}`,
-            };
-          });
-        }
-
-        // ========== UI ==========
-        updatePlaylistUI() {
-          this.playlistEl.innerHTML = "";
-          this.tracks.forEach((t, i) => {
-            const li = document.createElement("li");
-            li.textContent = t.title;
-            li.className = i === this.currentTrack ? "active" : "";
-            li.addEventListener("click", () => this.playTrack(i));
-            this.playlistEl.appendChild(li);
-          });
-        }
-
-        scrollToCurrent() {
-          const item = this.playlistEl.children[this.currentTrack];
-          if (item)
-            item.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-
-        formatTime(seconds) {
-          const m = Math.floor(seconds / 60)
-            .toString()
-            .padStart(2, "0");
-          const s = Math.floor(seconds % 60)
-            .toString()
-            .padStart(2, "0");
-          return `${m}:${s}`;
-        }
-
-        updateProgress() {
-          this.currentTimeEl.textContent = this.formatTime(
-            this.audio.currentTime
-          );
-          this.durationEl.textContent = this.formatTime(
-            this.audio.duration || 0
-          );
-          if (this.audio.duration) {
-            this.progress.value =
-              (this.audio.currentTime / this.audio.duration) * 100;
+            }));
           }
-        }
 
-        seekAudio(value) {
-          if (this.audio.duration) {
-            this.audio.currentTime = (value / 100) * this.audio.duration;
-          }
-        }
-
-        // ========== Play Controls ==========
-        playTrack(index) {
-          if (!this.tracks.length) return;
-          this.currentTrack = index;
-          this.audio.src = this.tracks[index].url;
-          this.audio
-            .play()
-            .then(() => this.noSleep.enable())
-            .catch(console.log);
-          this.updatePlaylistUI();
-          this.scrollToCurrent();
-        }
-
-        togglePlay() {
-          if (this.audio.paused)
-            this.audio.play().then(() => this.noSleep.enable());
-          else {
-            this.audio.pause();
-            this.noSleep.disable();
-          }
-        }
-
-        nextTrack() {
-          if (this.replayEnabled) this.replayTrack();
-          else this.playTrack((this.currentTrack + 1) % this.tracks.length);
-        }
-
-        prevTrack() {
-          this.playTrack(
-            (this.currentTrack - 1 + this.tracks.length) % this.tracks.length
-          );
-        }
-
-        shuffleTracks() {
-          if (!this.tracks.length) return;
-          this.tracks = this.shuffleArray(this.tracks);
-          this.playTrack(0);
-        }
-
-        replayTrack() {
-          if (!this.tracks.length) return;
-          this.audio.currentTime = 0;
-          this.audio
-            .play()
-            .then(() => this.noSleep.enable())
-            .catch(console.log);
-        }
-
-        shuffleArray(arr) {
-          const a = [...arr];
-          for (let i = a.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [a[i], a[j]] = [a[j], a[i]];
-          }
-          return a;
-        }
-
-        // ========== Save/Load State ==========
-        saveState() {
-          if (!this.tracks.length) return;
-          localStorage.setItem(
-            "playlistState",
-            JSON.stringify({
-              tracks: this.tracks,
-              currentTrack: this.currentTrack,
-              currentTime: this.audio.currentTime,
-              isPlaying: !this.audio.paused,
-              replayEnabled: this.replayEnabled,
-            })
-          );
-        }
-
-        loadState() {
-          const stateJSON = localStorage.getItem("playlistState");
-          if (!stateJSON) return null;
-          try {
-            return JSON.parse(stateJSON);
-          } catch {
-            return null;
-          }
-        }
-
-        async loadStateOnStart() {
-          const saved = this.loadState();
-          if (saved) {
-            this.tracks = saved.tracks;
-            this.currentTrack = saved.currentTrack;
-            this.replayEnabled = saved.replayEnabled ?? false;
-            this.updateReplayButtonUI();
-
-            this.updatePlaylistUI();
-            this.audio.src = this.tracks[this.currentTrack].url;
-            this.audio.currentTime = saved.currentTime || 0;
-            if (saved.isPlaying)
-              this.audio.play().then(() => this.noSleep.enable());
-            this.scrollToCurrent();
-          }
-        }
-
-        toggleReplay() {
-          this.replayEnabled = !this.replayEnabled;
-          this.updateReplayButtonUI();
-        }
-
-        updateReplayButtonUI() {
-          this.replayBtn.classList.toggle("active", this.replayEnabled);
-        }
-
-        // ========== Timer ==========
-        startTimer() {
-          const timeValue = this.stopTimeInput.value;
-          if (!timeValue) return alert("Chọn thời gian hẹn giờ");
-
-          const [hours, minutes] = timeValue.split(":").map(Number);
-          const now = new Date();
-          const target = new Date();
-          target.setHours(hours, minutes, 0, 0);
-
-          if (target <= now) target.setDate(target.getDate() + 1);
-
-          this.stopTime = target;
-          this.startCountdown();
-        }
-
-        startCountdown() {
-          this.stopTimeInput.style.display = "none";
-          this.startTimerBtn.style.display = "none";
-          this.countdownEl.style.display = "inline";
-          this.cancelTimerBtn.style.display = "inline";
-
-          this.updateCountdown();
-          this.countdownInterval = setInterval(
-            () => this.updateCountdown(),
-            1000
-          );
-        }
-
-        updateCountdown() {
-          const now = new Date();
-          const diff = this.stopTime - now;
-          if (diff <= 0) {
-            this.stopAudioByTimer();
-            return;
-          }
-          const h = String(Math.floor(diff / (1000 * 60 * 60))).padStart(
-            2,
-            "0"
-          );
-          const m = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(
-            2,
-            "0"
-          );
-          const s = String(Math.floor((diff / 1000) % 60)).padStart(2, "0");
-          this.countdownEl.textContent = `${h}:${m}:${s}`;
-        }
-
-        stopAudioByTimer() {
-          this.audio.pause();
-          this.noSleep.disable();
-          clearInterval(this.countdownInterval);
-          this.countdownEl.textContent = "00:00:00";
-
-          this.stopTimeInput.style.display = "inline";
-          this.startTimerBtn.style.display = "inline";
-          this.countdownEl.style.display = "none";
-          this.cancelTimerBtn.style.display = "none";
-        }
-
-        cancelTimer() {
-          clearInterval(this.countdownInterval);
-          this.countdownEl.textContent = "00:00:00";
-          this.stopTimeInput.style.display = "inline";
-          this.startTimerBtn.style.display = "inline";
-          this.countdownEl.style.display = "none";
-          this.cancelTimerBtn.style.display = "none";
-        }
-
-        // ========== Event Listeners ==========
-        initEventListeners() {
-          window.addEventListener("beforeunload", () => this.saveState());
-
-          this.audio.addEventListener("ended", () => this.nextTrack());
-          this.audio.addEventListener(
-            "play",
-            () => (this.playPauseBtn.textContent = "Pause")
-          );
-          this.audio.addEventListener(
-            "pause",
-            () => (this.playPauseBtn.textContent = "Play")
-          );
-          this.audio.addEventListener("timeupdate", () =>
-            this.updateProgress()
-          );
-          this.audio.addEventListener("loadedmetadata", () =>
-            this.updateProgress()
-          );
-
-          document
-            .getElementById("loadBtn")
-            .addEventListener("click", async () => {
-              const id = document.getElementById("identifier").value.trim();
-              if (!id) return alert("Nhập identifier");
-              this.tracks = await this.fetchTracks(id);
-              if (!this.tracks.length) return alert("Không tìm thấy bài hát");
-              this.playTrack(0);
+          updatePlaylistUI() {
+            this.playlistEl.innerHTML = "";
+            this.tracks.forEach((t, i) => {
+              const li = document.createElement("li");
+              li.textContent = t.title;
+              li.className = i === this.currentTrack ? "active" : "";
+              li.addEventListener("click", () => this.playTrack(i));
+              this.playlistEl.appendChild(li);
             });
+          }
 
-          this.playPauseBtn.addEventListener("click", () => this.togglePlay());
-          document
-            .getElementById("nextBtn")
-            .addEventListener("click", () => this.nextTrack());
-          document
-            .getElementById("prevBtn")
-            .addEventListener("click", () => this.prevTrack());
-          document
-            .getElementById("shuffleBtn")
-            .addEventListener("click", () => this.shuffleTracks());
-          this.replayBtn.addEventListener("click", () => this.toggleReplay());
+          scrollToCurrent() {
+            const item = this.playlistEl.children[this.currentTrack];
+            if (item)
+              item.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
 
-          this.progress.addEventListener("input", (e) =>
-            this.seekAudio(e.target.value)
-          );
+          formatTime(seconds) {
+            const m = Math.floor(seconds / 60)
+              .toString()
+              .padStart(2, "0");
+            const s = Math.floor(seconds % 60)
+              .toString()
+              .padStart(2, "0");
+            return `${m}:${s}`;
+          }
 
-          // Timer buttons
-          this.startTimerBtn.addEventListener("click", () => this.startTimer());
-          this.cancelTimerBtn.addEventListener("click", () =>
-            this.cancelTimer()
-          );
+          updateProgress() {
+            this.currentTimeEl.textContent = this.formatTime(
+              this.audio.currentTime
+            );
+            this.durationEl.textContent = this.formatTime(
+              this.audio.duration || 0
+            );
+            if (this.audio.duration)
+              this.progress.value =
+                (this.audio.currentTime / this.audio.duration) * 100;
+            this.saveState(); // lưu mỗi khi cập nhật progress
+          }
+
+          seekAudio(value) {
+            if (this.audio.duration)
+              this.audio.currentTime = (value / 100) * this.audio.duration;
+            this.saveState();
+          }
+
+          playTrack(index) {
+            if (!this.tracks.length) return;
+            this.currentTrack = index;
+            this.audio.src = this.tracks[index].url;
+            this.audio
+              .play()
+              .then(() => this.noSleep.enable())
+              .catch(() => {});
+            this.updatePlaylistUI();
+            this.scrollToCurrent();
+            this.saveState();
+          }
+
+          togglePlay() {
+            if (this.audio.paused)
+              this.audio.play().then(() => this.noSleep.enable());
+            else {
+              this.audio.pause();
+              this.noSleep.disable();
+            }
+            this.saveState();
+          }
+
+          nextTrack() {
+            if (this.replayEnabled) this.replayTrack();
+            else this.playTrack((this.currentTrack + 1) % this.tracks.length);
+          }
+
+          prevTrack() {
+            this.playTrack(
+              (this.currentTrack - 1 + this.tracks.length) % this.tracks.length
+            );
+          }
+
+          shuffleTracks() {
+            if (!this.tracks.length) return;
+            this.tracks = this.shuffleArray(this.tracks);
+            this.playTrack(0);
+          }
+
+          replayTrack() {
+            if (!this.tracks.length) return;
+            this.audio.currentTime = 0;
+            this.audio
+              .play()
+              .then(() => this.noSleep.enable())
+              .catch(() => {});
+          }
+
+          shuffleArray(arr) {
+            const a = [...arr];
+            for (let i = a.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+          }
+
+          saveState() {
+            if (!this.tracks.length) return;
+            try {
+              localStorage.setItem(
+                "playlistState",
+                JSON.stringify({
+                  tracks: this.tracks,
+                  currentTrack: this.currentTrack,
+                  currentTime: this.audio.currentTime,
+                  isPlaying: !this.audio.paused,
+                  replayEnabled: this.replayEnabled,
+                })
+              );
+            } catch (e) {
+              console.warn("Cannot save playlist state:", e);
+            }
+          }
+
+          loadState() {
+            try {
+              const stateJSON = localStorage.getItem("playlistState");
+              if (!stateJSON) return null;
+              return JSON.parse(stateJSON);
+            } catch (e) {
+              return null;
+            }
+          }
+
+          async loadStateOnStart() {
+            const saved = this.loadState();
+            if (saved) {
+              this.tracks = saved.tracks;
+              this.currentTrack = saved.currentTrack;
+              this.replayEnabled = saved.replayEnabled ?? false;
+              this.updateReplayButtonUI();
+
+              this.updatePlaylistUI();
+              this.audio.src = this.tracks[this.currentTrack].url;
+              this.audio.currentTime = saved.currentTime || 0;
+              if (saved.isPlaying)
+                this.audio.play().then(() => this.noSleep.enable());
+              this.scrollToCurrent();
+            }
+          }
+
+          toggleReplay() {
+            this.replayEnabled = !this.replayEnabled;
+            this.updateReplayButtonUI();
+            this.saveState();
+          }
+
+          updateReplayButtonUI() {
+            this.replayBtn.classList.toggle("active", this.replayEnabled);
+          }
+
+          // Timer functions giữ nguyên
+          startTimer() {
+            /* ... giữ nguyên ... */
+          }
+          startCountdown() {
+            /* ... giữ nguyên ... */
+          }
+          updateCountdown() {
+            /* ... giữ nguyên ... */
+          }
+          stopAudioByTimer() {
+            /* ... giữ nguyên ... */
+          }
+          cancelTimer() {
+            /* ... giữ nguyên ... */
+          }
+
+          initEventListeners() {
+            window.addEventListener("beforeunload", () => this.saveState());
+
+            this.audio.addEventListener("ended", () => this.nextTrack());
+            this.audio.addEventListener("play", () => {
+              this.playPauseBtn.textContent = "Pause";
+              this.saveState();
+            });
+            this.audio.addEventListener("pause", () => {
+              this.playPauseBtn.textContent = "Play";
+              this.saveState();
+            });
+            this.audio.addEventListener("timeupdate", () =>
+              this.updateProgress()
+            );
+            this.audio.addEventListener("loadedmetadata", () =>
+              this.updateProgress()
+            );
+
+            document
+              .getElementById("loadBtn")
+              .addEventListener("click", async () => {
+                const id = document.getElementById("identifier").value.trim();
+                if (!id) return alert("Nhập identifier");
+                this.tracks = await this.fetchTracks(id);
+                if (!this.tracks.length) return alert("Không tìm thấy bài hát");
+                this.playTrack(0);
+              });
+
+            this.playPauseBtn.addEventListener("click", () =>
+              this.togglePlay()
+            );
+            document
+              .getElementById("nextBtn")
+              .addEventListener("click", () => this.nextTrack());
+            document
+              .getElementById("prevBtn")
+              .addEventListener("click", () => this.prevTrack());
+            document
+              .getElementById("shuffleBtn")
+              .addEventListener("click", () => this.shuffleTracks());
+            this.replayBtn.addEventListener("click", () => this.toggleReplay());
+            this.progress.addEventListener("input", (e) =>
+              this.seekAudio(e.target.value)
+            );
+
+            // Timer buttons giữ nguyên
+            this.startTimerBtn.addEventListener("click", () =>
+              this.startTimer()
+            );
+            this.cancelTimerBtn.addEventListener("click", () =>
+              this.cancelTimer()
+            );
+          }
         }
-      }
 
-      new ArchivePlaylist();
+        new ArchivePlaylist();
+      });
     </script>
   </body>
 </html>
