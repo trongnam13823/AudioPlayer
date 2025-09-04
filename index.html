@@ -10,11 +10,17 @@
         margin: 0;
         padding: 0;
         box-sizing: border-box;
+        user-select: none;
       }
 
-      /* ===== Body ===== */
+      button {
+        background-color: #ddd;
+        color: #000;
+        border: none;
+        border-radius: unset;
+      }
+
       body {
-        margin: 0;
         font-family: sans-serif;
         display: flex;
         flex-direction: column;
@@ -22,26 +28,16 @@
         height: 100vh;
         padding: 10px;
       }
-
-      /* ===== Header/input ===== */
       .identifier-wrapper {
         display: flex;
         gap: 5px;
       }
-
-      #identifier {
-        padding: 5px;
-        font-size: 1em;
-        flex: 1;
-      }
-
+      #identifier,
       #loadBtn {
         padding: 5px;
         font-size: 1em;
         flex: 1;
       }
-
-      /* ===== Controls Sticky ===== */
       .controls-wrapper {
         position: sticky;
         top: 0;
@@ -52,35 +48,27 @@
         gap: 10px;
         padding-bottom: 5px;
       }
-
       .control-buttons {
         display: flex;
         gap: 5px;
       }
-
       .control-buttons button {
         flex: 1 1 auto;
         padding: 5px;
         font-size: 0.9em;
       }
-
-      /* ===== Progress ===== */
       #progressContainer {
         display: flex;
         align-items: center;
         gap: 5px;
       }
-
       #progress {
         flex: 1;
       }
-
       #currentTime,
       #duration {
         text-align: center;
       }
-
-      /* ===== Timer ===== */
       #timerContainer {
         display: flex;
         align-items: center;
@@ -88,7 +76,6 @@
         gap: 5px;
         flex-wrap: wrap;
       }
-
       #stopTime,
       #startTimerBtn,
       #cancelTimerBtn {
@@ -96,33 +83,26 @@
         font-size: 0.9em;
         height: 100%;
       }
-
       #countdown {
         font-weight: bold;
       }
-
-      /* ===== Playlist ===== */
       #playlistContainer {
         flex: 1;
         overflow-y: auto;
       }
-
       #playlist {
         list-style: none;
       }
-
       #playlist li {
         padding: 5px;
         cursor: pointer;
         border-bottom: 1px solid #eee;
       }
-
       #playlist li.active {
         font-weight: bold;
         background-color: black;
         color: #fff;
       }
-
       #replayBtn.active {
         font-weight: bold;
       }
@@ -182,12 +162,10 @@
             this.currentTrack = 0;
             this.noSleep = new NoSleep();
             this.replayEnabled = false;
-
-            this.timer = null;
-            this.countdownInterval = null;
             this.stopTime = null;
+            this.countdownInterval = null;
 
-            // UI elements
+            // UI
             this.playlistEl = document.getElementById("playlist");
             this.playPauseBtn = document.getElementById("playPauseBtn");
             this.replayBtn = document.getElementById("replayBtn");
@@ -263,7 +241,7 @@
             if (this.audio.duration)
               this.progress.value =
                 (this.audio.currentTime / this.audio.duration) * 100;
-            this.saveState(); // lưu mỗi khi cập nhật progress
+            this.saveState();
           }
 
           seekAudio(value) {
@@ -344,16 +322,15 @@
                 })
               );
             } catch (e) {
-              console.warn("Cannot save playlist state:", e);
+              console.warn(e);
             }
           }
 
           loadState() {
             try {
-              const stateJSON = localStorage.getItem("playlistState");
-              if (!stateJSON) return null;
-              return JSON.parse(stateJSON);
-            } catch (e) {
+              const s = localStorage.getItem("playlistState");
+              return s ? JSON.parse(s) : null;
+            } catch {
               return null;
             }
           }
@@ -365,7 +342,6 @@
               this.currentTrack = saved.currentTrack;
               this.replayEnabled = saved.replayEnabled ?? false;
               this.updateReplayButtonUI();
-
               this.updatePlaylistUI();
               this.audio.src = this.tracks[this.currentTrack].url;
               this.audio.currentTime = saved.currentTime || 0;
@@ -385,26 +361,73 @@
             this.replayBtn.classList.toggle("active", this.replayEnabled);
           }
 
-          // Timer functions giữ nguyên
+          // ===== Timer =====
           startTimer() {
-            /* ... giữ nguyên ... */
-          }
-          startCountdown() {
-            /* ... giữ nguyên ... */
-          }
-          updateCountdown() {
-            /* ... giữ nguyên ... */
-          }
-          stopAudioByTimer() {
-            /* ... giữ nguyên ... */
-          }
-          cancelTimer() {
-            /* ... giữ nguyên ... */
+            const timeValue = this.stopTimeInput.value;
+            if (!timeValue) return alert("Chọn thời gian hẹn giờ");
+            const [hours, minutes] = timeValue.split(":").map(Number);
+            const now = new Date();
+            const target = new Date();
+            target.setHours(hours, minutes, 0, 0);
+            if (target <= now) target.setDate(target.getDate() + 1);
+            this.stopTime = target;
+            this.startCountdown();
           }
 
+          startCountdown() {
+            this.stopTimeInput.style.display = "none";
+            this.startTimerBtn.style.display = "none";
+            this.countdownEl.style.display = "inline";
+            this.cancelTimerBtn.style.display = "inline";
+            this.updateCountdown();
+            this.countdownInterval = setInterval(
+              () => this.updateCountdown(),
+              1000
+            );
+          }
+
+          updateCountdown() {
+            const now = new Date();
+            const diff = this.stopTime - now;
+            if (diff <= 0) {
+              this.stopAudioByTimer();
+              return;
+            }
+            const h = String(Math.floor(diff / (1000 * 60 * 60))).padStart(
+              2,
+              "0"
+            );
+            const m = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(
+              2,
+              "0"
+            );
+            const s = String(Math.floor((diff / 1000) % 60)).padStart(2, "0");
+            this.countdownEl.textContent = `${h}:${m}:${s}`;
+          }
+
+          stopAudioByTimer() {
+            this.audio.pause();
+            this.noSleep.disable();
+            clearInterval(this.countdownInterval);
+            this.countdownEl.textContent = "00:00:00";
+            this.stopTimeInput.style.display = "inline";
+            this.startTimerBtn.style.display = "inline";
+            this.countdownEl.style.display = "none";
+            this.cancelTimerBtn.style.display = "none";
+          }
+
+          cancelTimer() {
+            clearInterval(this.countdownInterval);
+            this.countdownEl.textContent = "00:00:00";
+            this.stopTimeInput.style.display = "inline";
+            this.startTimerBtn.style.display = "inline";
+            this.countdownEl.style.display = "none";
+            this.cancelTimerBtn.style.display = "none";
+          }
+
+          // ===== Event listeners =====
           initEventListeners() {
             window.addEventListener("beforeunload", () => this.saveState());
-
             this.audio.addEventListener("ended", () => this.nextTrack());
             this.audio.addEventListener("play", () => {
               this.playPauseBtn.textContent = "Pause";
@@ -447,8 +470,6 @@
             this.progress.addEventListener("input", (e) =>
               this.seekAudio(e.target.value)
             );
-
-            // Timer buttons giữ nguyên
             this.startTimerBtn.addEventListener("click", () =>
               this.startTimer()
             );
