@@ -36,8 +36,6 @@
         flex: 1;
       }
       .controls-wrapper {
-        position: sticky;
-        top: 0;
         background: #fff;
         border-bottom: 1px solid #ccc;
         display: flex;
@@ -106,17 +104,21 @@
     </style>
   </head>
   <body>
-    <div class="identifier-wrapper">
-      <input
-        type="text"
-        id="identifier"
-        placeholder="Nhập identifier"
-        value="tiktok-tacgiasuthatman"
-      />
-      <button id="loadBtn">Load Playlist</button>
+    <div id="playlistContainer">
+      <ul id="playlist"></ul>
     </div>
 
     <div class="controls-wrapper">
+      <div class="identifier-wrapper">
+        <input
+          type="text"
+          id="identifier"
+          placeholder="Nhập identifier"
+          value="tiktok-tacgiasuthatman"
+        />
+        <button id="loadBtn">Load Playlist</button>
+      </div>
+
       <div class="control-buttons">
         <button id="replayBtn">Replay</button>
         <button id="prevBtn">Prev</button>
@@ -144,10 +146,6 @@
         />
         <span id="duration">00:00</span>
       </div>
-    </div>
-
-    <div id="playlistContainer">
-      <ul id="playlist"></ul>
     </div>
 
     <script>
