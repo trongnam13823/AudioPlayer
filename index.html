@@ -1211,7 +1211,7 @@
             const iconName = this.state.isPlaying ? "pause" : "play";
             const title = this.state.isPlaying ? "Tạm dừng" : "Phát nhạc";
 
-            this.elements.playPauseIcon.setAttribute("data-lucide", iconName);
+            this.elements.playPauseBtn.innerHTML = `<i data-lucide="${iconName}"></i>`;
             this.elements.playPauseBtn.title = title;
 
             if (typeof lucide !== "undefined") {
